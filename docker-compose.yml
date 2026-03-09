@@ -1,0 +1,12 @@
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NGINX_VERSION: 1.27.4
+    image: nginx-brotli:slim
+    container_name: nginx-brotli
+    ports:
+      - "8080:80"
+    restart: unless-stopped
