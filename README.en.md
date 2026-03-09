@@ -2,13 +2,13 @@
 
 [中文版本](./README.md)
 
-This project provides a minimal `nginx` image based on `debian:bookworm-slim`. It uses a multi-stage build to compile and load the `ngx_brotli` module so Brotli compression is enabled in a slim runtime image.
+This project provides a minimal `nginx` image based on `debian:bookworm-slim`. It uses a multi-stage build to compile and load the `ngx_brotli` module so image consumers can decide whether to enable Brotli in their site configuration.
 
 ## Features
 
 - Uses a slim runtime base to keep the final image lightweight
 - Builds `ngx_brotli` as dynamic Nginx modules in a multi-stage Docker build
-- Enables `brotli on` and `brotli_static on` by default
+- Keeps Brotli module loading in `nginx.conf` while moving runtime switches into `conf.d/default.conf`
 - Includes a minimal `nginx.conf` and default site config
 - Provides a ready-to-run `docker-compose.yml`
 
@@ -54,7 +54,7 @@ docker compose down
 
 ## Verify Brotli
 
-Use the following command to verify Brotli compression is working:
+The sample site enables Brotli in `conf.d/default.conf` by default. Use the following command to verify Brotli compression is working:
 
 ```bash
 curl -I -H "Accept-Encoding: br" http://localhost:8080
@@ -83,6 +83,12 @@ Update the version and rebuild if needed:
 docker compose up -d --build
 ```
 
+### Adjust the Brotli policy
+
+The image only loads the Brotli dynamic modules in `nginx.conf`. Whether Brotli is enabled, plus its compression level and MIME type settings, is controlled by `conf.d/default.conf`.
+
+If you want to disable or redefine Brotli behavior as an image consumer, replace or edit `conf.d/default.conf`.
+
 ## Configuration Notes
 
 ### `Dockerfile`
@@ -94,12 +100,13 @@ docker compose up -d --build
 ### `nginx.conf`
 
 - Loads Brotli dynamic modules at startup
-- Enables Brotli compression by default
-- Includes common text and static asset MIME types for compression
+- Provides global HTTP baseline settings
+- Includes `/etc/nginx/conf.d/*.conf`
 
 ### `conf.d/default.conf`
 
 - Listens on port `80`
+- Contains the default Brotli runtime settings and can be customized by image consumers
 - Serves files from `/usr/share/nginx/html`
 
 ## Common Commands

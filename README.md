@@ -2,13 +2,13 @@
 
 [English Version](./README.en.md)
 
-这是一个基于 `debian:bookworm-slim` 的 `nginx` 精简镜像示例，使用多阶段构建方式编译并加载 `ngx_brotli` 模块，用于启用 Brotli 压缩。
+这是一个基于 `debian:bookworm-slim` 的 `nginx` 精简镜像示例，使用多阶段构建方式编译并加载 `ngx_brotli` 模块，让镜像使用者可以按需在站点配置中启用 Brotli 压缩。
 
 ## 功能说明
 
 - 基于 `slim` 运行时镜像，尽量减小体积
 - 通过多阶段构建编译 `ngx_brotli` 动态模块
-- 默认启用 `brotli on` 和 `brotli_static on`
+- 仅在 `nginx.conf` 中保留 Brotli 模块加载，运行时开关下放到 `conf.d/default.conf`
 - 提供最小可用的 `nginx.conf` 与默认站点配置
 - 通过 `docker-compose.yml` 快速构建和启动
 
@@ -54,7 +54,7 @@ docker compose down
 
 ## Brotli 验证
 
-可以通过以下命令检查响应是否启用了 Brotli：
+默认示例站点会在 `conf.d/default.conf` 中启用 Brotli。可以通过以下命令检查响应是否启用了 Brotli：
 
 ```bash
 curl -I -H "Accept-Encoding: br" http://localhost:8080
@@ -83,6 +83,12 @@ args:
 docker compose up -d --build
 ```
 
+### 调整 Brotli 策略
+
+镜像只在 `nginx.conf` 中负责加载 Brotli 动态模块，是否启用以及压缩级别、类型等运行时配置由 `conf.d/default.conf` 决定。
+
+如果你作为镜像使用者希望关闭或改写 Brotli，直接修改或挂载自己的 `conf.d/default.conf` 即可。
+
 ## 配置说明
 
 ### `Dockerfile`
@@ -94,12 +100,13 @@ docker compose up -d --build
 ### `nginx.conf`
 
 - 启动时加载 Brotli 动态模块
-- 默认启用 Brotli 压缩
-- 包含常见静态资源与文本类型的压缩配置
+- 提供全局 HTTP 基础配置
+- 统一包含 `/etc/nginx/conf.d/*.conf`
 
 ### `conf.d/default.conf`
 
 - 监听 `80` 端口
+- 包含 Brotli 的默认运行时配置，可由镜像使用者自行调整
 - 默认站点根目录为 `/usr/share/nginx/html`
 
 ## 常用命令
