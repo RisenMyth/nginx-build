@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       registry:
-        description: "目标 registry 地址，不包含协议，留空时回退到 vars/secrets.REGISTRY"
+        description: "目标 registry 地址，仅包含 host[:port]，留空时回退到 vars/secrets.REGISTRY"
         required: false
         default: ""
       image_repository:
@@ -33,6 +33,7 @@ jobs:
       packages: write
     env:
       REGISTRY_INPUT: ${{ inputs.registry || vars.REGISTRY || secrets.REGISTRY }}
+      REGISTRY_NAMESPACE: ${{ vars.REGISTRY_NAMESPACE || secrets.REGISTRY_NAMESPACE }}
       REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME || secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD || vars.REGISTRY_PASSWORD }}
       IMAGE_REPOSITORY: ${{ inputs.image_repository }}
@@ -49,6 +50,8 @@ jobs:
         run: |
           set -euo pipefail
           raw_registry="${REGISTRY_INPUT%/}"
+          registry_namespace="${REGISTRY_NAMESPACE#/}"
+          registry_namespace="${registry_namespace%/}"
           image_repository="${IMAGE_REPOSITORY#/}"
           image_repository="${image_repository%/}"
 
@@ -58,30 +61,27 @@ jobs:
           test -n "${image_repository}" || { echo "::error::Missing image repository."; exit 1; }
 
           if [[ "${raw_registry}" == *"://"* ]]; then
-            echo "::error::Registry must not include a protocol. Use registry.example.com or registry.example.com/namespace."
+            echo "::error::Registry must not include a protocol. Use registry.example.com or registry.example.com:5000."
             exit 1
           fi
 
-          registry_host="${raw_registry%%/*}"
-          registry_namespace=""
           if [[ "${raw_registry}" == */* ]]; then
-            registry_namespace="${raw_registry#*/}"
-            registry_namespace="${registry_namespace#/}"
-            registry_namespace="${registry_namespace%/}"
+            echo "::error::Registry must not include a namespace. Set vars/secrets.REGISTRY_NAMESPACE separately."
+            exit 1
           fi
 
-          if [[ -z "${registry_host}" ]]; then
+          if [[ -z "${raw_registry}" ]]; then
             echo "::error::Invalid registry value: ${raw_registry}"
             exit 1
           fi
 
-          image_ref="${registry_host}"
+          image_ref="${raw_registry}"
           if [[ -n "${registry_namespace}" ]]; then
             image_ref="${image_ref}/${registry_namespace}"
           fi
           image_ref="${image_ref}/${image_repository}"
 
-          echo "registry_host=${registry_host}" >> "$GITHUB_OUTPUT"
+          echo "registry_host=${raw_registry}" >> "$GITHUB_OUTPUT"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
