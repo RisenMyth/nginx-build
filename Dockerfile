@@ -1,19 +1,20 @@
 ARG NGINX_VERSION=1.27.4
+ARG ALPINE_VERSION=3.21
 
-FROM debian:bookworm-slim AS builder
+FROM alpine:${ALPINE_VERSION} AS builder
 
 ARG NGINX_VERSION
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        build-essential \
+RUN apk add --no-cache \
+        build-base \
         ca-certificates \
+        cmake \
         curl \
         git \
-        libpcre2-dev \
-        libssl-dev \
-        zlib1g-dev \
-    && rm -rf /var/lib/apt/lists/*
+        linux-headers \
+        openssl-dev \
+        pcre2-dev \
+        zlib-dev
 
 WORKDIR /usr/src
 
@@ -46,29 +47,36 @@ RUN ./configure \
         --with-pcre-jit \
         --with-threads \
         --add-dynamic-module=/usr/src/ngx_brotli \
-    && make -j"$(nproc)" \
+    && cd /usr/src/ngx_brotli/deps/brotli \
+    && mkdir -p out \
+    && cd out \
+    && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_CXX_FLAGS="-O2" -DCMAKE_C_FLAGS="-O2" -DCMAKE_INSTALL_PREFIX=./installed .. \
+    && cmake --build . --config Release -j"$(getconf _NPROCESSORS_ONLN)" \
+    && cd /usr/src/nginx-${NGINX_VERSION} \
+    && make -j"$(getconf _NPROCESSORS_ONLN)" \
     && mkdir -p /usr/lib/nginx/modules \
     && cp objs/ngx_http_brotli_filter_module.so /usr/lib/nginx/modules/ \
     && cp objs/ngx_http_brotli_static_module.so /usr/lib/nginx/modules/ \
-    && make install
+    && make install \
+    && strip /usr/sbin/nginx /usr/lib/nginx/modules/*.so
 
-FROM debian:bookworm-slim
+FROM alpine:${ALPINE_VERSION}
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
         ca-certificates \
-        libpcre2-8-0 \
-        libssl3 \
-        zlib1g \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system nginx \
-    && useradd --system --gid nginx --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin nginx \
+        libgcc \
+        libstdc++ \
+        openssl \
+        pcre2 \
+        zlib \
+    && addgroup -S nginx \
+    && adduser -S -D -H -G nginx nginx \
     && mkdir -p /etc/nginx/conf.d /usr/lib/nginx/modules /usr/share/nginx/html \
     && mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp /var/cache/nginx/fastcgi_temp /var/cache/nginx/uwsgi_temp /var/cache/nginx/scgi_temp \
     && mkdir -p /var/log/nginx
 
 COPY --from=builder /usr/sbin/nginx /usr/sbin/nginx
-COPY --from=builder /etc/nginx /etc/nginx
+COPY --from=builder /etc/nginx/mime.types /etc/nginx/mime.types
 COPY --from=builder /usr/lib/nginx/modules /usr/lib/nginx/modules
 
 COPY nginx.conf /etc/nginx/nginx.conf

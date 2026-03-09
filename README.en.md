@@ -1,12 +1,12 @@
-# nginx-brotli slim image
+# nginx-brotli alpine slim image
 
 [中文版本](./README.md)
 
-This project provides a minimal `nginx` image based on `debian:bookworm-slim`. It uses a multi-stage build to compile and load the `ngx_brotli` module so image consumers can decide whether to enable Brotli in their site configuration.
+This project provides a minimal `nginx` image based on `alpine:3.21`. It uses a multi-stage build to compile and load the `ngx_brotli` module so image consumers can decide whether to enable Brotli in their site configuration.
 
 ## Features
 
-- Uses a slim runtime base to keep the final image lightweight
+- Uses an Alpine runtime base to keep the final image lightweight
 - Builds `ngx_brotli` as dynamic Nginx modules in a multi-stage Docker build
 - Keeps Brotli module loading in `nginx.conf` while moving runtime switches into `conf.d/default.conf`
 - Includes a minimal `nginx.conf` and default site config

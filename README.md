@@ -1,8 +1,8 @@
-# nginx-brotli slim 镜像
+# nginx-brotli alpine slim 镜像
 
 [English Version](./README.en.md)
 
-这是一个基于 `debian:bookworm-slim` 的 `nginx` 精简镜像示例，使用多阶段构建方式编译并加载 `ngx_brotli` 模块，让镜像使用者可以按需在站点配置中启用 Brotli 压缩。
+这是一个基于 `alpine:3.21` 的 `nginx` 精简镜像示例，使用多阶段构建方式编译并加载 `ngx_brotli` 模块，让镜像使用者可以按需在站点配置中启用 Brotli 压缩。
 
 ## 功能说明
 
