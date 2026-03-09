@@ -32,7 +32,7 @@ jobs:
       contents: read
       packages: write
     env:
-      REGISTRY: ${{ inputs.registry || vars.REGISTRY || secrets.REGISTRY }}
+      REGISTRY_INPUT: ${{ inputs.registry || vars.REGISTRY || secrets.REGISTRY }}
       REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME || secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD || vars.REGISTRY_PASSWORD }}
       IMAGE_REPOSITORY: ${{ inputs.image_repository }}
@@ -43,20 +43,46 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate registry configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${REGISTRY}" || { echo "::error::Missing registry. Set workflow input or vars/secrets.REGISTRY."; exit 1; }
-          test -n "${REGISTRY_USERNAME}" || { echo "::error::Missing registry username. Set vars/secrets.REGISTRY_USERNAME."; exit 1; }
-          test -n "${REGISTRY_PASSWORD}" || { echo "::error::Missing registry password. Set vars/secrets.REGISTRY_PASSWORD."; exit 1; }
-
-      - name: Compute image reference
+      - name: Normalize registry reference
         id: image
         shell: bash
         run: |
           set -euo pipefail
-          echo "image_ref=${REGISTRY}/${IMAGE_REPOSITORY}" >> "$GITHUB_OUTPUT"
+          raw_registry="${REGISTRY_INPUT%/}"
+          image_repository="${IMAGE_REPOSITORY#/}"
+          image_repository="${image_repository%/}"
+
+          test -n "${raw_registry}" || { echo "::error::Missing registry. Set workflow input or vars/secrets.REGISTRY."; exit 1; }
+          test -n "${REGISTRY_USERNAME}" || { echo "::error::Missing registry username. Set vars/secrets.REGISTRY_USERNAME."; exit 1; }
+          test -n "${REGISTRY_PASSWORD}" || { echo "::error::Missing registry password. Set vars/secrets.REGISTRY_PASSWORD."; exit 1; }
+          test -n "${image_repository}" || { echo "::error::Missing image repository."; exit 1; }
+
+          if [[ "${raw_registry}" == *"://"* ]]; then
+            echo "::error::Registry must not include a protocol. Use registry.example.com or registry.example.com/namespace."
+            exit 1
+          fi
+
+          registry_host="${raw_registry%%/*}"
+          registry_namespace=""
+          if [[ "${raw_registry}" == */* ]]; then
+            registry_namespace="${raw_registry#*/}"
+            registry_namespace="${registry_namespace#/}"
+            registry_namespace="${registry_namespace%/}"
+          fi
+
+          if [[ -z "${registry_host}" ]]; then
+            echo "::error::Invalid registry value: ${raw_registry}"
+            exit 1
+          fi
+
+          image_ref="${registry_host}"
+          if [[ -n "${registry_namespace}" ]]; then
+            image_ref="${image_ref}/${registry_namespace}"
+          fi
+          image_ref="${image_ref}/${image_repository}"
+
+          echo "registry_host=${registry_host}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -64,7 +90,7 @@ jobs:
       - name: Log in to registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ steps.image.outputs.registry_host }}
           username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ env.REGISTRY_PASSWORD }}
 
