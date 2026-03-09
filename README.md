@@ -43,7 +43,7 @@ docker compose up -d --build
 启动后访问：
 
 ```text
-http://localhost:8080
+http://localhost
 ```
 
 ### 3. 停止服务
@@ -143,7 +143,7 @@ ghcr.io/my-org/nginx-build:latest
 默认示例站点会在 `conf.d/default.conf` 中启用 Brotli。可以通过以下命令检查响应是否启用了 Brotli：
 
 ```bash
-curl -I -H "Accept-Encoding: br" http://localhost:8080
+curl -I -H "Accept-Encoding: br" http://localhost
 ```
 
 如果响应头中包含以下内容，则表示 Brotli 已生效：
@@ -217,8 +217,10 @@ docker exec -it nginx-brotli nginx -t
 
 ## 说明
 
-- 容器内 Nginx 默认监听 `80` 端口
-- `docker-compose.yml` 示例默认映射宿主机 `8080` 到容器 `80`
+- 镜像默认暴露容器端口 `80` 和 `443`
+- 默认示例站点监听 `80` 端口；`443` 端口预留给你自定义 HTTPS/TLS 配置
+- Nginx 以 root 启动以绑定特权端口，worker 进程通过 `nginx.conf` 里的 `user nginx;` 降权运行
+- `docker-compose.yml` 示例默认映射宿主机 `80/443` 到容器 `80/443`
 - 容器名称为 `nginx-brotli`
 - 示例页面位于 `html/index.html`
 

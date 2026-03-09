@@ -1,0 +1,7 @@
+.git
+.github
+.codex
+.gitignore
+README.md
+README.en.md
+docker-compose.yml

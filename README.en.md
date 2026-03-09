@@ -43,7 +43,7 @@ docker compose up -d --build
 After startup, visit:
 
 ```text
-http://localhost:8080
+http://localhost
 ```
 
 ### 3. Stop the service
@@ -143,7 +143,7 @@ Then for each manual run you only need to provide:
 The sample site enables Brotli in `conf.d/default.conf` by default. Use the following command to verify Brotli compression is working:
 
 ```bash
-curl -I -H "Accept-Encoding: br" http://localhost:8080
+curl -I -H "Accept-Encoding: br" http://localhost
 ```
 
 If the response headers include the following, Brotli is active:
@@ -217,8 +217,10 @@ docker exec -it nginx-brotli nginx -t
 
 ## Notes
 
-- Nginx listens on container port `80` by default
-- The `docker-compose.yml` example maps host port `8080` to container port `80`
+- The image exposes container ports `80` and `443`
+- The sample site listens on port `80`; port `443` is mapped for your own HTTPS/TLS server configuration
+- Nginx starts as root to bind privileged ports, and worker processes run as `nginx` via `nginx.conf`
+- The `docker-compose.yml` example maps host ports `80` and `443` to container ports `80` and `443`
 - The container name is `nginx-brotli`
 - The sample page is located at `html/index.html`
 

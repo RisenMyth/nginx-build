@@ -20,7 +20,7 @@ WORKDIR /usr/src
 
 RUN curl -fsSLO "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" \
     && tar -xzf "nginx-${NGINX_VERSION}.tar.gz" \
-    && git clone --recursive https://github.com/google/ngx_brotli.git
+    && git clone --depth 1 --recursive --shallow-submodules https://github.com/google/ngx_brotli.git
 
 WORKDIR /usr/src/nginx-${NGINX_VERSION}
 
@@ -63,17 +63,19 @@ RUN ./configure \
 FROM alpine:${ALPINE_VERSION}
 
 RUN apk add --no-cache \
-        ca-certificates \
-        libgcc \
         libstdc++ \
-        openssl \
+        libcrypto3 \
+        libssl3 \
         pcre2 \
         zlib \
     && addgroup -S nginx \
     && adduser -S -D -H -G nginx nginx \
-    && mkdir -p /etc/nginx/conf.d /usr/lib/nginx/modules /usr/share/nginx/html \
-    && mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp /var/cache/nginx/fastcgi_temp /var/cache/nginx/uwsgi_temp /var/cache/nginx/scgi_temp \
-    && mkdir -p /var/log/nginx
+    && install -d -o nginx -g nginx \
+        /var/cache/nginx/client_temp \
+        /var/cache/nginx/proxy_temp \
+        /var/cache/nginx/fastcgi_temp \
+        /var/cache/nginx/uwsgi_temp \
+        /var/cache/nginx/scgi_temp
 
 COPY --from=builder /usr/sbin/nginx /usr/sbin/nginx
 COPY --from=builder /etc/nginx/mime.types /etc/nginx/mime.types
@@ -81,11 +83,9 @@ COPY --from=builder /usr/lib/nginx/modules /usr/lib/nginx/modules
 
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY conf.d/default.conf /etc/nginx/conf.d/default.conf
-COPY html/ /usr/share/nginx/html/
+COPY --chown=nginx:nginx html/ /usr/share/nginx/html/
 
-RUN chown -R nginx:nginx /var/cache/nginx /var/log/nginx /usr/share/nginx/html
-
-EXPOSE 80
+EXPOSE 80 443
 
 STOPSIGNAL SIGQUIT
 

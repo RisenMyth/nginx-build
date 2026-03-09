@@ -8,5 +8,6 @@ services:
     image: nginx-brotli:slim
     container_name: nginx-brotli
     ports:
-      - "8080:80"
+      - "80:80"
+      - "443:443"
     restart: unless-stopped
