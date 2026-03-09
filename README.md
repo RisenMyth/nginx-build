@@ -52,6 +52,92 @@ http://localhost:8080
 docker compose down
 ```
 
+## GitHub Actions 构建并推送镜像
+
+仓库内已经提供手动触发的 GitHub Actions 工作流：[`.github/workflows/manual-build-push.yml`](./.github/workflows/manual-build-push.yml)。
+它会使用当前仓库中的 `Dockerfile` 构建镜像，并推送到你指定的镜像仓库。
+
+### 1. 配置仓库变量与密钥
+
+进入 GitHub 仓库的 `Settings` -> `Secrets and variables` -> `Actions`，按需配置以下项：
+
+| 名称 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `REGISTRY` | Variable 或 Secret | 否 | 镜像仓库地址，只能是 `host[:port]`，例如 `ghcr.io`、`registry.example.com:5000`。也可以在运行 workflow 时临时填写。 |
+| `REGISTRY_NAMESPACE` | Variable 或 Secret | 否 | 镜像命名空间，例如 `my-team`。不要和 `REGISTRY` 写在一起。 |
+| `REGISTRY_USERNAME` | Variable 或 Secret | 是 | 镜像仓库登录用户名。 |
+| `REGISTRY_PASSWORD` | Secret | 是 | 镜像仓库登录密码或 Access Token。建议只放在 Secret 中。 |
+
+注意：
+
+- `REGISTRY` 不能包含 `https://` 或 `http://`
+- `REGISTRY` 不能包含命名空间路径，例如不能写成 `ghcr.io/my-team`
+- 命名空间应单独放在 `REGISTRY_NAMESPACE`
+
+### 2. 手动触发构建
+
+进入仓库的 `Actions` 页面，选择 `Manual Docker Build And Push`，点击 `Run workflow` 后填写参数：
+
+| 输入项 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `registry` | 否 | 空 | 当前次构建使用的 registry 地址。留空时回退到 `vars/secrets.REGISTRY`。 |
+| `image_repository` | 是 | `nginx-brotli` | 镜像仓库名，不包含 registry，例如 `team/nginx-build`。 |
+| `image_tag` | 是 | `latest` | 要推送的镜像标签。 |
+| `nginx_version` | 是 | `1.27.4` | 透传给 `Dockerfile` 的 `NGINX_VERSION` 构建参数。 |
+| `push_latest` | 否 | `false` | 当 `image_tag` 不是 `latest` 时，是否额外再推送一个 `latest` 标签。 |
+
+### 3. 镜像命名规则
+
+workflow 会按下面的格式组装最终镜像地址：
+
+```text
+<registry>/<registry_namespace>/<image_repository>:<image_tag>
+```
+
+其中 `registry_namespace` 为空时会自动省略。
+
+例如：
+
+- `REGISTRY=ghcr.io`
+- `REGISTRY_NAMESPACE=my-org`
+- `image_repository=nginx-build`
+- `image_tag=1.27.4`
+
+最终会推送：
+
+```text
+ghcr.io/my-org/nginx-build:1.27.4
+```
+
+如果同时开启 `push_latest=true`，并且 `image_tag` 不是 `latest`，还会额外推送：
+
+```text
+ghcr.io/my-org/nginx-build:latest
+```
+
+### 4. 一个推荐用法
+
+如果你希望大部分情况下只在页面上填写版本号，可以这样配置：
+
+- 仓库 Variable: `REGISTRY=ghcr.io`
+- 仓库 Variable: `REGISTRY_NAMESPACE=my-org`
+- 仓库 Variable: `REGISTRY_USERNAME=<你的 GitHub 用户名或仓库机器人账号>`
+- 仓库 Secret: `REGISTRY_PASSWORD=<你的 PAT 或仓库令牌>`
+
+之后每次只需在 `Run workflow` 时填写：
+
+- `image_repository=nginx-brotli`
+- `image_tag=1.27.4-alpine`
+- `nginx_version=1.27.4`
+- `push_latest=true`
+
+### 5. 工作流行为说明
+
+- 工作流使用 `docker/build-push-action@v6` 构建并推送镜像
+- 已启用 GitHub Actions 缓存：`cache-from/cache-to: type=gha`
+- 当前 workflow 仅支持手动触发，不会在 `push` 或 `tag` 时自动发布
+- 构建上下文为仓库根目录，实际使用的是当前分支上的 `Dockerfile`
+
 ## Brotli 验证
 
 默认示例站点会在 `conf.d/default.conf` 中启用 Brotli。可以通过以下命令检查响应是否启用了 Brotli：

@@ -52,6 +52,92 @@ http://localhost:8080
 docker compose down
 ```
 
+## Build And Push With GitHub Actions
+
+The repository already includes a manually triggered workflow at [`.github/workflows/manual-build-push.yml`](./.github/workflows/manual-build-push.yml).
+It builds the image from the current repository `Dockerfile` and pushes it to the registry you specify.
+
+### 1. Configure repository variables and secrets
+
+Open your GitHub repository and go to `Settings` -> `Secrets and variables` -> `Actions`, then configure these entries as needed:
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `REGISTRY` | Variable or Secret | No | Registry host, `host[:port]` only, for example `ghcr.io` or `registry.example.com:5000`. You can also provide it at workflow runtime. |
+| `REGISTRY_NAMESPACE` | Variable or Secret | No | Registry namespace such as `my-team`. Do not combine it with `REGISTRY`. |
+| `REGISTRY_USERNAME` | Variable or Secret | Yes | Registry login username. |
+| `REGISTRY_PASSWORD` | Secret | Yes | Registry password or access token. Prefer storing this only as a Secret. |
+
+Notes:
+
+- `REGISTRY` must not include `https://` or `http://`
+- `REGISTRY` must not include a namespace path such as `ghcr.io/my-team`
+- Put the namespace in `REGISTRY_NAMESPACE` instead
+
+### 2. Run the workflow manually
+
+Open the repository `Actions` tab, choose `Manual Docker Build And Push`, click `Run workflow`, and fill in these inputs:
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `registry` | No | empty | Registry host for this run. If blank, it falls back to `vars/secrets.REGISTRY`. |
+| `image_repository` | Yes | `nginx-brotli` | Image repository name without the registry, for example `team/nginx-build`. |
+| `image_tag` | Yes | `latest` | Image tag to push. |
+| `nginx_version` | Yes | `1.27.4` | Passed to the `Dockerfile` as the `NGINX_VERSION` build arg. |
+| `push_latest` | No | `false` | When `image_tag` is not `latest`, also push an additional `latest` tag. |
+
+### 3. Image naming rule
+
+The workflow assembles the final image reference in this format:
+
+```text
+<registry>/<registry_namespace>/<image_repository>:<image_tag>
+```
+
+If `registry_namespace` is empty, that segment is omitted automatically.
+
+Example:
+
+- `REGISTRY=ghcr.io`
+- `REGISTRY_NAMESPACE=my-org`
+- `image_repository=nginx-build`
+- `image_tag=1.27.4`
+
+The pushed image will be:
+
+```text
+ghcr.io/my-org/nginx-build:1.27.4
+```
+
+If `push_latest=true` and `image_tag` is not `latest`, the workflow also pushes:
+
+```text
+ghcr.io/my-org/nginx-build:latest
+```
+
+### 4. Recommended setup
+
+If you want most runs to require only a version change in the UI, a practical setup is:
+
+- Repository Variable: `REGISTRY=ghcr.io`
+- Repository Variable: `REGISTRY_NAMESPACE=my-org`
+- Repository Variable: `REGISTRY_USERNAME=<your GitHub username or bot account>`
+- Repository Secret: `REGISTRY_PASSWORD=<your PAT or registry token>`
+
+Then for each manual run you only need to provide:
+
+- `image_repository=nginx-brotli`
+- `image_tag=1.27.4-alpine`
+- `nginx_version=1.27.4`
+- `push_latest=true`
+
+### 5. Workflow behavior
+
+- Uses `docker/build-push-action@v6` to build and push the image
+- Enables GitHub Actions cache via `cache-from/cache-to: type=gha`
+- Supports manual triggering only; it does not auto-publish on `push` or `tag`
+- Uses the repository root as build context and the current branch `Dockerfile`
+
 ## Verify Brotli
 
 The sample site enables Brotli in `conf.d/default.conf` by default. Use the following command to verify Brotli compression is working:
