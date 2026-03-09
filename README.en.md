@@ -131,7 +131,8 @@ docker exec -it nginx-brotli nginx -t
 
 ## Notes
 
-- The service is exposed on host port `8080`
+- Nginx listens on container port `80` by default
+- The `docker-compose.yml` example maps host port `8080` to container port `80`
 - The container name is `nginx-brotli`
 - The sample page is located at `html/index.html`
 

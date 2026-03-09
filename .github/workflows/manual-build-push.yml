@@ -1,0 +1,96 @@
+name: Manual Docker Build And Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      registry:
+        description: "目标 registry 地址，不包含协议，留空时回退到 vars/secrets.REGISTRY"
+        required: false
+        default: ""
+      image_repository:
+        description: "镜像仓库名，不包含 registry，例如 team/nginx-build"
+        required: true
+        default: "nginx-brotli"
+      image_tag:
+        description: "镜像标签"
+        required: true
+        default: "latest"
+      nginx_version:
+        description: "Docker build arg: NGINX_VERSION"
+        required: true
+        default: "1.27.4"
+      push_latest:
+        description: "当 tag 不是 latest 时，是否额外推送 latest"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ${{ inputs.registry || vars.REGISTRY || secrets.REGISTRY }}
+      REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME || secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD || vars.REGISTRY_PASSWORD }}
+      IMAGE_REPOSITORY: ${{ inputs.image_repository }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      PUSH_LATEST: ${{ inputs.push_latest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate registry configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${REGISTRY}" || { echo "::error::Missing registry. Set workflow input or vars/secrets.REGISTRY."; exit 1; }
+          test -n "${REGISTRY_USERNAME}" || { echo "::error::Missing registry username. Set vars/secrets.REGISTRY_USERNAME."; exit 1; }
+          test -n "${REGISTRY_PASSWORD}" || { echo "::error::Missing registry password. Set vars/secrets.REGISTRY_PASSWORD."; exit 1; }
+
+      - name: Compute image reference
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "image_ref=${REGISTRY}/${IMAGE_REPOSITORY}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+
+      - name: Prepare image tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          tags="${{ steps.image.outputs.image_ref }}:${IMAGE_TAG}"
+          if [ "${PUSH_LATEST}" = "true" ] && [ "${IMAGE_TAG}" != "latest" ]; then
+            tags="${tags}"$'\n'"${{ steps.image.outputs.image_ref }}:latest"
+          fi
+          {
+            echo "tags<<EOF"
+            echo "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          build-args: |
+            NGINX_VERSION=${{ inputs.nginx_version }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=docker-build-cache
+          cache-to: type=gha,mode=max,scope=docker-build-cache

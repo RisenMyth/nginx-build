@@ -131,7 +131,8 @@ docker exec -it nginx-brotli nginx -t
 
 ## 说明
 
-- 当前默认对外暴露端口为 `8080`
+- 容器内 Nginx 默认监听 `80` 端口
+- `docker-compose.yml` 示例默认映射宿主机 `8080` 到容器 `80`
 - 容器名称为 `nginx-brotli`
 - 示例页面位于 `html/index.html`
 
