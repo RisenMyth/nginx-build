@@ -1,4 +1,4 @@
-# nginx-brotli alpine slim image
+# nginx-brotli alpine minimal image
 
 [中文版本](./README.md)
 
@@ -191,9 +191,10 @@ If you want to disable or redefine Brotli behavior as an image consumer, replace
 
 ### `conf.d/default.conf`
 
-- Listens on port `80`
+- Listens on port `80` by default
 - Contains the default Brotli runtime settings and can be customized by image consumers
 - Serves files from `/usr/share/nginx/html`
+- Although the image is built with HTTP/3 support, the sample config does not enable HTTP/3 listeners by default; image consumers need to add the relevant `listen ... quic` and TLS settings themselves
 
 ## Common Commands
 

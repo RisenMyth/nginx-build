@@ -1,4 +1,6 @@
 .codex/
+.claude/
+.mcp.json
 
 .idea/
 *.iml

@@ -34,7 +34,7 @@ RUN ./configure \
         --conf-path=/etc/nginx/nginx.conf \
         --error-log-path=/var/log/nginx/error.log \
         --http-log-path=/var/log/nginx/access.log \
-        --pid-path=/var/run/nginx.pid \
+        --pid-path=/tmp/nginx.pid \
         --lock-path=/var/run/nginx.lock \
         --http-client-body-temp-path=/var/cache/nginx/client_temp \
         --http-proxy-temp-path=/var/cache/nginx/proxy_temp \
@@ -81,7 +81,8 @@ RUN apk add --no-cache \
         /var/cache/nginx/proxy_temp \
         /var/cache/nginx/fastcgi_temp \
         /var/cache/nginx/uwsgi_temp \
-        /var/cache/nginx/scgi_temp
+        /var/cache/nginx/scgi_temp \
+    && install -d /var/log/nginx
 
 COPY --from=builder /usr/sbin/nginx /usr/sbin/nginx
 COPY --from=builder /etc/nginx/mime.types /etc/nginx/mime.types

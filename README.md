@@ -1,4 +1,4 @@
-# nginx-brotli alpine slim 镜像
+# nginx-brotli alpine 精简镜像
 
 [English Version](./README.en.md)
 
@@ -6,7 +6,7 @@
 
 ## 功能说明
 
-- 基于 `slim` 运行时镜像，尽量减小体积
+- 基于 Alpine 运行时镜像，尽量减小体积
 - 通过多阶段构建编译 `ngx_brotli` 动态模块
 - 仅在 `nginx.conf` 中保留 Brotli 模块加载，运行时开关下放到 `conf.d/default.conf`
 - 提供最小可用的 `nginx.conf` 与默认站点配置
@@ -191,9 +191,10 @@ docker compose up -d --build
 
 ### `conf.d/default.conf`
 
-- 监听 `80` 端口
+- 默认监听 `80` 端口
 - 包含 Brotli 的默认运行时配置，可由镜像使用者自行调整
 - 默认站点根目录为 `/usr/share/nginx/html`
+- 虽然镜像已编译 HTTP/3 支持，但默认示例配置未启用 HTTP/3 监听，需由使用者自行补充相关 `listen ... quic` 与 TLS 配置
 
 ## 常用命令
 
