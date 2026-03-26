@@ -1,9 +1,11 @@
 ARG NGINX_VERSION=1.27.4
 ARG ALPINE_VERSION=3.21
+ARG QUICTLS_REF=openssl-3.1.7+quic
 
 FROM alpine:${ALPINE_VERSION} AS builder
 
 ARG NGINX_VERSION
+ARG QUICTLS_REF
 
 RUN apk add --no-cache \
         build-base \
@@ -12,7 +14,7 @@ RUN apk add --no-cache \
         curl \
         git \
         linux-headers \
-        openssl-dev \
+        perl \
         pcre2-dev \
         zlib-dev
 
@@ -20,6 +22,7 @@ WORKDIR /usr/src
 
 RUN curl -fsSLO "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" \
     && tar -xzf "nginx-${NGINX_VERSION}.tar.gz" \
+    && git clone --depth 1 --branch "${QUICTLS_REF}" https://github.com/quictls/openssl.git quictls \
     && git clone --depth 1 --recursive --shallow-submodules https://github.com/google/ngx_brotli.git
 
 WORKDIR /usr/src/nginx-${NGINX_VERSION}
@@ -44,6 +47,9 @@ RUN ./configure \
         --with-http_ssl_module \
         --with-http_stub_status_module \
         --with-http_v2_module \
+        --with-http_v3_module \
+        --with-openssl=/usr/src/quictls \
+        --with-openssl-opt=no-tests \
         --with-pcre-jit \
         --with-threads \
         --add-dynamic-module=/usr/src/ngx_brotli \
