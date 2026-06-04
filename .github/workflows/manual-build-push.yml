@@ -3,12 +3,8 @@ name: Manual Docker Build And Push
 on:
   workflow_dispatch:
     inputs:
-      registry:
-        description: "目标 registry 地址，仅包含 host[:port]，留空时回退到 vars/secrets.REGISTRY"
-        required: false
-        default: ""
       image_repository:
-        description: "镜像仓库名，不包含 registry，例如 team/nginx-build"
+        description: "镜像仓库名，不包含 registry 也不包含命名空间，例如 nginx-build"
         required: true
         default: "nginx-brotli"
       image_tag:
@@ -23,7 +19,7 @@ on:
         description: "当 tag 不是 latest 时，是否额外推送 latest"
         required: false
         type: boolean
-        default: false
+        default: true
 
 jobs:
   build-and-push:
@@ -32,7 +28,7 @@ jobs:
       contents: read
       packages: write
     env:
-      REGISTRY_INPUT: ${{ inputs.registry || vars.REGISTRY || secrets.REGISTRY }}
+      REGISTRY_INPUT: ${{ vars.REGISTRY || secrets.REGISTRY }}
       REGISTRY_NAMESPACE: ${{ vars.REGISTRY_NAMESPACE || secrets.REGISTRY_NAMESPACE }}
       REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME || secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD || vars.REGISTRY_PASSWORD }}
