@@ -80,40 +80,35 @@ Open the repository `Actions` tab, choose `Manual Docker Build And Push`, click 
 
 | Input | Required | Default | Description |
 | --- | --- | --- | --- |
-| `registry` | No | empty | Registry host for this run. If blank, it falls back to `vars/secrets.REGISTRY`. |
 | `image_repository` | Yes | `nginx-brotli` | Image repository name without the registry, for example `team/nginx-build`. |
-| `image_tag` | Yes | `latest` | Image tag to push. |
-| `nginx_version` | Yes | `1.27.4` | Passed to the `Dockerfile` as the `NGINX_VERSION` build arg. |
-| `push_latest` | No | `false` | When `image_tag` is not `latest`, also push an additional `latest` tag. |
+| `nginx_version` | No | empty (falls back to the `NGINX_VERSION` default in the `Dockerfile`) | NGINX version, for example `1.31.10`. It is used as the image tag and passed to the `Dockerfile` as the `NGINX_VERSION` build arg. |
 
 ### 3. Image naming rule
 
-The workflow assembles the final image reference in this format:
+The image tag follows `nginx_version` directly, and the workflow assembles the final references as:
 
 ```text
-<registry>/<registry_namespace>/<image_repository>:<image_tag>
+<registry>/<registry_namespace>/<image_repository>:<nginx_version>
+<registry>/<registry_namespace>/<image_repository>:latest
 ```
 
-If `registry_namespace` is empty, that segment is omitted automatically.
+If `registry_namespace` is empty, that segment is omitted automatically. Both tags are pushed in the same build, so `latest` always mirrors the most recent build.
 
 Example:
 
 - `REGISTRY=ghcr.io`
 - `REGISTRY_NAMESPACE=my-org`
 - `image_repository=nginx-build`
-- `image_tag=1.27.4`
+- `nginx_version=1.31.10`
 
-The pushed image will be:
-
-```text
-ghcr.io/my-org/nginx-build:1.27.4
-```
-
-If `push_latest=true` and `image_tag` is not `latest`, the workflow also pushes:
+The pushed images will be:
 
 ```text
+ghcr.io/my-org/nginx-build:1.31.10
 ghcr.io/my-org/nginx-build:latest
 ```
+
+> The version is normalized before use: surrounding whitespace and a leading `v` are stripped (`v1.31.10` becomes `1.31.10`), and it must match `x.y.z`. Otherwise the workflow fails before building.
 
 ### 4. Recommended setup
 
@@ -127,14 +122,17 @@ If you want most runs to require only a version change in the UI, a practical se
 Then for each manual run you only need to provide:
 
 - `image_repository=nginx-brotli`
-- `image_tag=1.27.4-alpine`
-- `nginx_version=1.27.4`
-- `push_latest=true`
+- `nginx_version=1.31.10`
+
+That produces both `nginx-brotli:1.31.10` and `nginx-brotli:latest`.
 
 ### 5. Workflow behavior
 
 - Uses `docker/build-push-action@v6` to build and push the image
-- Enables GitHub Actions cache via `cache-from/cache-to: type=gha`
+- Image tag follows `nginx_version` and `latest` is pushed alongside it
+- `provenance` / `sbom` are disabled: registries such as Aliyun ACR do not support OCI 1.1 attestations (`application/vnd.oci.empty.v1+json`) and reject the push with `denied: unknown manifest class`
+- After the push, `docker buildx imagetools inspect` verifies the index has no `unknown/unknown` platform
+- Enables GitHub Actions cache via `cache-from/cache-to: type=gha` (cache read/write failures do not fail the job)
 - Supports manual triggering only; it does not auto-publish on `push` or `tag`
 - Uses the repository root as build context and the current branch `Dockerfile`
 

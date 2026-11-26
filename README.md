@@ -80,40 +80,35 @@ docker compose down
 
 | 输入项 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `registry` | 否 | 空 | 当前次构建使用的 registry 地址。留空时回退到 `vars/secrets.REGISTRY`。 |
 | `image_repository` | 是 | `nginx-brotli` | 镜像仓库名，不包含 registry，例如 `team/nginx-build`。 |
-| `image_tag` | 是 | `latest` | 要推送的镜像标签。 |
-| `nginx_version` | 是 | `1.27.4` | 透传给 `Dockerfile` 的 `NGINX_VERSION` 构建参数。 |
-| `push_latest` | 否 | `false` | 当 `image_tag` 不是 `latest` 时，是否额外再推送一个 `latest` 标签。 |
+| `nginx_version` | 否 | 空（取 `Dockerfile` 中 `NGINX_VERSION` 的默认值） | NGINX 版本，例如 `1.31.10`。同时作为镜像标签，并透传为 `Dockerfile` 的 `NGINX_VERSION` 构建参数。 |
 
 ### 3. 镜像命名规则
 
-workflow 会按下面的格式组装最终镜像地址：
+镜像标签直接跟随 `nginx_version`，workflow 会按下面的格式组装最终镜像地址：
 
 ```text
-<registry>/<registry_namespace>/<image_repository>:<image_tag>
+<registry>/<registry_namespace>/<image_repository>:<nginx_version>
+<registry>/<registry_namespace>/<image_repository>:latest
 ```
 
-其中 `registry_namespace` 为空时会自动省略。
+其中 `registry_namespace` 为空时会自动省略；两个标签一次推送完成，`latest` 始终同步为最新一次构建的内容。
 
 例如：
 
-- `REGISTRY=ghcr.io`
-- `REGISTRY_NAMESPACE=my-org`
-- `image_repository=nginx-build`
-- `image_tag=1.27.4`
+- `REGISTRY=registry.cn-shanghai.aliyuncs.com`
+- `REGISTRY_NAMESPACE=rishchen`
+- `image_repository=nginx-brotli`
+- `nginx_version=1.31.10`
 
 最终会推送：
 
 ```text
-ghcr.io/my-org/nginx-build:1.27.4
+registry.cn-shanghai.aliyuncs.com/rishchen/nginx-brotli:1.31.10
+registry.cn-shanghai.aliyuncs.com/rishchen/nginx-brotli:latest
 ```
 
-如果同时开启 `push_latest=true`，并且 `image_tag` 不是 `latest`，还会额外推送：
-
-```text
-ghcr.io/my-org/nginx-build:latest
-```
+> 版本号会做一次规整：去掉首尾空白和前导 `v`（`v1.31.10` 会被规范成 `1.31.10`），并且必须是 `x.y.z` 形式，否则 workflow 会在构建前直接失败。
 
 ### 4. 一个推荐用法
 
@@ -127,14 +122,17 @@ ghcr.io/my-org/nginx-build:latest
 之后每次只需在 `Run workflow` 时填写：
 
 - `image_repository=nginx-brotli`
-- `image_tag=1.27.4-alpine`
-- `nginx_version=1.27.4`
-- `push_latest=true`
+- `nginx_version=1.31.10`
+
+就会同时产出 `nginx-brotli:1.31.10` 和 `nginx-brotli:latest`。
 
 ### 5. 工作流行为说明
 
 - 工作流使用 `docker/build-push-action@v6` 构建并推送镜像
-- 已启用 GitHub Actions 缓存：`cache-from/cache-to: type=gha`
+- 镜像标签跟随 `nginx_version`，并同步推送 `latest`
+- 已关闭 `provenance` / `sbom`：阿里云 ACR 等仓库不支持 OCI 1.1 attestation（`application/vnd.oci.empty.v1+json`），否则推送会报 `denied: unknown manifest class`
+- 推送完成后会用 `docker buildx imagetools inspect` 校验索引里没有 `unknown/unknown` 平台
+- 已启用 GitHub Actions 缓存：`cache-from/cache-to: type=gha`（缓存读写失败不会导致任务失败）
 - 当前 workflow 仅支持手动触发，不会在 `push` 或 `tag` 时自动发布
 - 构建上下文为仓库根目录，实际使用的是当前分支上的 `Dockerfile`
 
