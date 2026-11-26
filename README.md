@@ -222,5 +222,3 @@ docker exec -it nginx-brotli nginx -t
 - `docker-compose.yml` 示例默认映射宿主机 `80/443` 到容器 `80/443`
 - 容器名称为 `nginx-brotli`
 - 示例页面位于 `html/index.html`
-
-如果你后续还想补充 `HTTPS`、反向代理、挂载自定义站点目录或生产环境配置，我可以继续帮你整理。
