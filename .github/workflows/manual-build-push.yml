@@ -4,22 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       image_repository:
-        description: "镜像仓库名，不包含 registry 也不包含命名空间，例如 nginx-build"
+        description: "镜像仓库名，不包含 registry 也不包含命名空间，例如 nginx-brotli"
         required: true
         default: "nginx-brotli"
-      image_tag:
-        description: "镜像标签"
-        required: true
-        default: "latest"
       nginx_version:
-        description: "Docker build arg: NGINX_VERSION"
-        required: true
-        default: "1.27.4"
-      push_latest:
-        description: "当 tag 不是 latest 时，是否额外推送 latest"
+        description: "NGINX 版本，同时用作镜像标签（如 1.31.10）。留空则取 Dockerfile 中 NGINX_VERSION 的默认值"
         required: false
-        type: boolean
-        default: true
+        default: ""
 
 jobs:
   build-and-push:
@@ -33,8 +24,7 @@ jobs:
       REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME || secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD || vars.REGISTRY_PASSWORD }}
       IMAGE_REPOSITORY: ${{ inputs.image_repository }}
-      IMAGE_TAG: ${{ inputs.image_tag }}
-      PUSH_LATEST: ${{ inputs.push_latest }}
+      NGINX_VERSION_INPUT: ${{ inputs.nginx_version }}
 
     steps:
       - name: Checkout repository
@@ -66,11 +56,6 @@ jobs:
             exit 1
           fi
 
-          if [[ -z "${raw_registry}" ]]; then
-            echo "::error::Invalid registry value: ${raw_registry}"
-            exit 1
-          fi
-
           image_ref="${raw_registry}"
           if [[ -n "${registry_namespace}" ]]; then
             image_ref="${image_ref}/${registry_namespace}"
@@ -79,6 +64,28 @@ jobs:
 
           echo "registry_host=${raw_registry}" >> "$GITHUB_OUTPUT"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve nginx version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${NGINX_VERSION_INPUT:-}"
+          version="$(printf '%s' "${version}" | tr -d '[:space:]')"
+          version="${version#v}"
+
+          if [[ -z "${version}" ]]; then
+            version="$(sed -nE 's/^[[:space:]]*(ARG[[:space:]]+)?NGINX_VERSION=([^[:space:]]*).*$/\2/p' Dockerfile | head -n1)"
+            echo "nginx_version 输入为空，回退到 Dockerfile 默认值：${version}"
+          fi
+
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid nginx_version '${version}'. Expected a version like 1.27.4 or 1.31.10."
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "NGINX_VERSION=${version}" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -95,15 +102,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tags="${{ steps.image.outputs.image_ref }}:${IMAGE_TAG}"
-          if [ "${PUSH_LATEST}" = "true" ] && [ "${IMAGE_TAG}" != "latest" ]; then
-            tags="${tags}"$'\n'"${{ steps.image.outputs.image_ref }}:latest"
-          fi
+          image_ref="${{ steps.image.outputs.image_ref }}"
+          version="${{ steps.version.outputs.version }}"
+
+          tags="${image_ref}:${version}"$'\n'"${image_ref}:latest"
           {
+            echo "primary=${image_ref}:${version}"
             echo "tags<<EOF"
             echo "$tags"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+          echo "将推送以下标签："
+          echo "$tags"
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -112,7 +123,23 @@ jobs:
           file: ./Dockerfile
           push: true
           build-args: |
-            NGINX_VERSION=${{ inputs.nginx_version }}
+            NGINX_VERSION=${{ steps.version.outputs.version }}
           tags: ${{ steps.tags.outputs.tags }}
+          # 阿里云 ACR 不支持 OCI 1.1 attestation（application/vnd.oci.empty.v1+json），
+          # 必须关闭 provenance/sbom，否则 push 会报
+          # "denied: unknown manifest class for application/vnd.oci.empty.v1+json"
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=docker-build-cache
-          cache-to: type=gha,mode=max,scope=docker-build-cache
+          cache-to: type=gha,mode=max,scope=docker-build-cache,ignore-error=true
+
+      - name: Verify pushed manifest has no attestations
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref="${{ steps.tags.outputs.primary }}"
+          echo "Inspecting ${ref}"
+          docker buildx imagetools inspect "${ref}"
+          if docker buildx imagetools inspect "${ref}" | grep -q "unknown/unknown"; then
+            echo "::warning::镜像索引里仍存在 unknown/unknown 平台（attestation）"
+          fi
