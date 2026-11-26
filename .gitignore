@@ -1,7 +1,9 @@
 .codex/
 .claude/
 .mcp.json
+opencode.json
 
 .idea/
 *.iml
 *.ipr
+/.openidea/
